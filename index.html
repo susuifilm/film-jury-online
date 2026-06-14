@@ -400,8 +400,17 @@
     function poster(film, large = false) {
       const cls = large ? "poster large" : "poster";
       return film.poster_url
-        ? `<div class="${cls}"><img src="${html(film.poster_url)}" alt="${html(film.title)}海报" onerror="this.remove()"></div>`
+        ? `<div class="${cls}"><img src="${html(imageSrc(film.poster_url))}" alt="${html(film.title)}海报" onerror="this.remove()"></div>`
         : `<div class="${cls}">${html((film.title || "?").slice(0, 1))}</div>`;
+    }
+
+    function imageSrc(url) {
+      if (!url) return "";
+      if (/doubanio\.com|douban\.com/.test(url)) {
+        const clean = url.replace(/^https?:\/\//, "");
+        return `https://images.weserv.nl/?url=${encodeURIComponent(clean)}`;
+      }
+      return url;
     }
 
     function filmMeta(film) {
