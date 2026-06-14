@@ -442,51 +442,56 @@
     }
 
     async function loadAll() {
-      const { data: userData } = await supabase.auth.getUser();
-      authUser = userData.user;
-      if (!authUser) {
+      try {
+        const { data: userData } = await supabase.auth.getUser();
+        authUser = userData.user;
+        if (!authUser) {
+          renderAuth();
+          return;
+        }
+
+        const { data: myProfile, error: profileError } = await supabase
+          .from("profiles")
+          .select("*")
+          .eq("user_id", authUser.id)
+          .single();
+        if (profileError || !myProfile) {
+          await supabase.auth.signOut();
+          el.loginStatus.textContent = `账号还没有被管理员授权。${profileError?.message || ""}`;
+          renderAuth();
+          return;
+        }
+        profile = myProfile;
+        activeJudgeId = isAdmin() ? activeJudgeId || authUser.id : authUser.id;
+
+        const [filmsRes, reviewsRes, resultsRes, screeningStatsRes] = await Promise.all([
+          supabase.from("films").select("*").order("sort_order").order("created_at"),
+          supabase.from("reviews").select("*"),
+          supabase.rpc("get_visible_results"),
+          supabase.rpc("get_visible_screening_stats")
+        ]);
+        if (filmsRes.error) throw new Error(`读取影片失败：${filmsRes.error.message}`);
+        if (reviewsRes.error) throw new Error(`读取评分失败：${reviewsRes.error.message}`);
+        if (resultsRes.error) throw new Error(`读取揭榜数据失败：${resultsRes.error.message}`);
+        films = filmsRes.data || [];
+        reviews = reviewsRes.data || [];
+        results = resultsRes.data || [];
+        screeningStats = screeningStatsRes.error ? [] : (screeningStatsRes.data || []);
+
+        if (isAdmin()) {
+          const { data, error } = await supabase.from("profiles").select("*").order("created_at");
+          if (error) throw new Error(`读取评委账号失败：${error.message}`);
+          profiles = data || [];
+          if (!profiles.some(p => p.user_id === activeJudgeId)) activeJudgeId = profiles[0]?.user_id || authUser.id;
+        } else {
+          profiles = [profile];
+        }
+
+        render();
+      } catch (error) {
+        el.loginStatus.textContent = error.message || "加载失败，请检查 Supabase 权限。";
         renderAuth();
-        return;
       }
-
-      const { data: myProfile, error: profileError } = await supabase
-        .from("profiles")
-        .select("*")
-        .eq("user_id", authUser.id)
-        .single();
-      if (profileError || !myProfile) {
-        await supabase.auth.signOut();
-        el.loginStatus.textContent = "账号还没有被管理员授权。";
-        renderAuth();
-        return;
-      }
-      profile = myProfile;
-      activeJudgeId = isAdmin() ? activeJudgeId || authUser.id : authUser.id;
-
-      const [filmsRes, reviewsRes, resultsRes, screeningStatsRes] = await Promise.all([
-        supabase.from("films").select("*").order("sort_order").order("created_at"),
-        supabase.from("reviews").select("*"),
-        supabase.rpc("get_visible_results"),
-        supabase.rpc("get_visible_screening_stats")
-      ]);
-      if (filmsRes.error) throw filmsRes.error;
-      if (reviewsRes.error) throw reviewsRes.error;
-      if (resultsRes.error) throw resultsRes.error;
-      films = filmsRes.data || [];
-      reviews = reviewsRes.data || [];
-      results = resultsRes.data || [];
-      screeningStats = screeningStatsRes.error ? [] : (screeningStatsRes.data || []);
-
-      if (isAdmin()) {
-        const { data, error } = await supabase.from("profiles").select("*").order("created_at");
-        if (error) throw error;
-        profiles = data || [];
-        if (!profiles.some(p => p.user_id === activeJudgeId)) activeJudgeId = profiles[0]?.user_id || authUser.id;
-      } else {
-        profiles = [profile];
-      }
-
-      render();
     }
 
     function renderAuth() {
@@ -792,16 +797,20 @@
 
     el.loginForm.addEventListener("submit", async event => {
       event.preventDefault();
-      el.loginStatus.textContent = "登录中...";
-      const { error } = await supabase.auth.signInWithPassword({
-        email: $("#loginEmail").value.trim(),
-        password: $("#loginPassword").value
-      });
-      if (error) {
+      try {
+        el.loginStatus.textContent = "登录中...";
+        const { error } = await supabase.auth.signInWithPassword({
+          email: $("#loginEmail").value.trim(),
+          password: $("#loginPassword").value
+        });
+        if (error) {
+          el.loginStatus.textContent = error.message;
+          return;
+        }
+        await loadAll();
+      } catch (error) {
         el.loginStatus.textContent = error.message;
-        return;
       }
-      await loadAll();
     });
 
     el.filmForm.addEventListener("submit", saveFilm);
@@ -847,4 +856,37 @@
         } catch (error) { alert(error.message); }
       }
       if (deleteAccount && confirm("确定删除这个评委账号吗？")) {
-     
+        try {
+          await api("/api/admin-users", { method: "DELETE", body: JSON.stringify({ user_id: deleteAccount.dataset.deleteAccount }) });
+          await loadAll();
+        } catch (error) { alert(error.message); }
+      }
+    });
+
+    document.addEventListener("input", async event => {
+      const score = event.target.closest("[data-score]");
+      if (!score || !activeJudgeId) return;
+      const patch = { [score.dataset.score]: Number(score.value) };
+      score.closest(".criterion").querySelector(".num").textContent = Number(score.value).toFixed(1);
+      try {
+        await upsertReview(score.dataset.filmId, patch);
+        renderResults();
+        renderScores();
+      } catch (error) { alert(error.message); }
+    });
+
+    document.addEventListener("change", async event => {
+      const field = event.target.closest("[data-review-field]");
+      if (!field || !activeJudgeId) return;
+      try {
+        await upsertReview(field.dataset.filmId, { [field.dataset.reviewField]: field.value || null });
+      } catch (error) { alert(error.message); }
+    });
+
+    loadAll().catch(error => {
+      el.loginStatus.textContent = error.message || "初始化失败。";
+      renderAuth();
+    });
+  </script>
+</body>
+</html>
