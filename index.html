@@ -250,6 +250,52 @@
       border: 0;
       border-radius: 0;
     }
+    .admin-section {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fffdf8;
+      overflow: hidden;
+    }
+    .admin-section-title {
+      width: 100%;
+      min-height: 46px;
+      border: 0;
+      border-radius: 0;
+      padding: 0 12px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: rgba(255, 246, 225, .72);
+      font-weight: 900;
+      text-align: left;
+    }
+    .admin-section-body {
+      padding: 12px;
+      border-top: 1px solid var(--line);
+    }
+    .account-card {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fffdf8;
+      overflow: hidden;
+    }
+    .account-title {
+      width: 100%;
+      min-height: 42px;
+      border: 0;
+      border-radius: 0;
+      padding: 0 10px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: transparent;
+      font-weight: 900;
+      text-align: left;
+    }
+    .account-body {
+      padding: 10px;
+      border-top: 1px solid var(--line);
+    }
     .bar-row { display: grid; gap: 5px; }
     .bar-label { display: flex; justify-content: space-between; color: var(--muted); font-size: 12px; }
     .bar { height: 8px; border-radius: 999px; overflow: hidden; background: #eadfcd; }
@@ -273,42 +319,62 @@
     <aside class="panel admin-only hidden">
       <div class="head"><h2>管理员</h2><span class="badge" id="adminCount">0</span></div>
       <div class="body stack">
-        <form id="doubanForm" class="stack">
-          <label>豆瓣链接
-            <input id="doubanUrl" placeholder="movie.douban.com/subject/...">
-          </label>
-          <label>抓取失败时粘贴豆瓣文本
-            <textarea id="doubanText" placeholder="可选"></textarea>
-          </label>
-          <button class="primary" id="doubanBtn">抓取到表单</button>
-          <div class="status" id="doubanStatus"></div>
-        </form>
+        <section class="admin-section">
+          <button class="admin-section-title" type="button" data-toggle-admin-section="addFilm">添加影片 <span>＋</span></button>
+          <div class="admin-section-body hidden" data-admin-section="addFilm">
+            <form id="doubanForm" class="stack">
+              <label>豆瓣链接
+                <input id="doubanUrl" placeholder="movie.douban.com/subject/...">
+              </label>
+              <label>抓取失败时粘贴豆瓣文本
+                <textarea id="doubanText" placeholder="可选"></textarea>
+              </label>
+              <button class="primary" id="doubanBtn">抓取到表单</button>
+              <div class="status" id="doubanStatus"></div>
+            </form>
 
-        <form id="filmForm" class="stack">
-          <label>片名<input id="filmTitle" required></label>
-          <div class="grid-3">
-            <label>导演<input id="filmDirector"></label>
-            <label>豆瓣评分<input id="filmRating" inputmode="decimal"></label>
-            <label>上映日期<input id="filmDate"></label>
+            <form id="filmForm" class="stack">
+              <label>片名<input id="filmTitle" required></label>
+              <div class="grid-3">
+                <label>导演<input id="filmDirector"></label>
+                <label>豆瓣评分<input id="filmRating" inputmode="decimal"></label>
+                <label>上映日期<input id="filmDate"></label>
+              </div>
+              <label>海报链接<input id="filmPoster"></label>
+              <label>简介<textarea id="filmIntro"></textarea></label>
+              <div class="grid-2">
+                <button class="primary" id="filmSubmit">加入影片</button>
+                <button type="button" id="filmCancel" class="hidden">取消编辑</button>
+              </div>
+            </form>
           </div>
-          <label>海报链接<input id="filmPoster"></label>
-          <label>简介<textarea id="filmIntro"></textarea></label>
-          <div class="grid-2">
-            <button class="primary" id="filmSubmit">加入影片</button>
-            <button type="button" id="filmCancel" class="hidden">取消编辑</button>
+        </section>
+
+        <section class="admin-section">
+          <button class="admin-section-title" type="button" data-toggle-admin-section="editFilms">调整修改影片 <span>＋</span></button>
+          <div class="admin-section-body hidden" data-admin-section="editFilms">
+            <div class="film-list" id="filmList"></div>
           </div>
-        </form>
+        </section>
 
-        <div class="film-list" id="filmList"></div>
+        <section class="admin-section">
+          <button class="admin-section-title" type="button" data-toggle-admin-section="addJudge">添加评委账号 <span>＋</span></button>
+          <div class="admin-section-body hidden" data-admin-section="addJudge">
+            <form id="judgeForm" class="stack">
+              <label>邮箱<input id="judgeEmail" type="email" required></label>
+              <label>昵称<input id="judgeName" required></label>
+              <label>初始密码<input id="judgePassword" type="password" required></label>
+              <button class="primary">创建评委账号</button>
+            </form>
+          </div>
+        </section>
 
-        <h3 class="section-title">评委账号</h3>
-        <form id="judgeForm" class="stack">
-          <label>邮箱<input id="judgeEmail" type="email" required></label>
-          <label>昵称<input id="judgeName" required></label>
-          <label>初始密码<input id="judgePassword" type="password" required></label>
-          <button class="primary">创建评委账号</button>
-        </form>
-        <div class="judge-list" id="judgeList"></div>
+        <section class="admin-section">
+          <button class="admin-section-title" type="button" data-toggle-admin-section="editJudges">修改评委账号 <span>＋</span></button>
+          <div class="admin-section-body hidden" data-admin-section="editJudges">
+            <div class="judge-list" id="judgeList"></div>
+          </div>
+        </section>
       </div>
     </aside>
 
@@ -386,6 +452,8 @@
     let resultSort = "date";
     const openScoreFilms = new Set();
     const openResultFilms = new Set();
+    const openAdminSections = new Set();
+    const openAccountCards = new Set();
 
     const $ = (selector) => document.querySelector(selector);
     const el = {
@@ -583,6 +651,18 @@
       renderScores();
       renderResults();
       renderScreeningStats();
+      renderAdminSections();
+    }
+
+    function renderAdminSections() {
+      document.querySelectorAll("[data-admin-section]").forEach(node => {
+        node.classList.toggle("hidden", !openAdminSections.has(node.dataset.adminSection));
+      });
+      document.querySelectorAll("[data-toggle-admin-section]").forEach(button => {
+        const open = openAdminSections.has(button.dataset.toggleAdminSection);
+        const marker = button.querySelector("span");
+        if (marker) marker.textContent = open ? "－" : "＋";
+      });
     }
 
     function renderFilms() {
@@ -603,16 +683,19 @@
       if (!isAdmin()) return;
       el.adminJudgeSelect.innerHTML = profiles.map(p => `<option value="${p.user_id}" ${activeJudgeId === p.user_id ? "selected" : ""}>${html(p.display_name)} (${p.role})</option>`).join("");
       el.judgeList.innerHTML = profiles.map(p => `
-        <article class="row">
-          <div class="poster">${html(p.display_name.slice(0, 1))}</div>
-          <div class="title">
+        <article class="account-card">
+          <button class="account-title" type="button" data-toggle-account="${p.user_id}">
+            <span>${html(p.display_name)}</span>
+            <span>${openAccountCards.has(p.user_id) ? "－" : "＋"}</span>
+          </button>
+          <div class="account-body stack ${openAccountCards.has(p.user_id) ? "" : "hidden"}">
             <label>邮箱<input value="${html(p.email || "")}" data-account-email="${p.user_id}"></label>
             <label>昵称<input value="${html(p.display_name)}" data-account-name="${p.user_id}"></label>
             <label>重置密码<input type="password" placeholder="留空不修改" data-account-password="${p.user_id}"></label>
-          </div>
-          <div class="actions">
-            <button class="icon" data-save-account="${p.user_id}">✓</button>
-            ${p.user_id === authUser.id ? "" : `<button class="icon danger" data-delete-account="${p.user_id}">×</button>`}
+            <div class="actions">
+              <button class="icon" data-save-account="${p.user_id}">✓</button>
+              ${p.user_id === authUser.id ? "" : `<button class="icon danger" data-delete-account="${p.user_id}">×</button>`}
+            </div>
           </div>
         </article>
       `).join("");
@@ -932,12 +1015,26 @@
       const deleteAccount = event.target.closest("[data-delete-account]");
       const toggleScore = event.target.closest("[data-toggle-score-film]");
       const toggleResult = event.target.closest("[data-toggle-result-film]");
+      const toggleAdminSection = event.target.closest("[data-toggle-admin-section]");
+      const toggleAccount = event.target.closest("[data-toggle-account]");
+      if (toggleAdminSection) {
+        const id = toggleAdminSection.dataset.toggleAdminSection;
+        openAdminSections.has(id) ? openAdminSections.delete(id) : openAdminSections.add(id);
+        renderAdminSections();
+      }
+      if (toggleAccount) {
+        const id = toggleAccount.dataset.toggleAccount;
+        openAccountCards.has(id) ? openAccountCards.delete(id) : openAccountCards.add(id);
+        renderJudges();
+      }
       if (edit) {
         const film = films.find(f => f.id === edit.dataset.editFilm);
         editingFilmId = film.id;
         fillFilmForm(film);
         el.filmSubmit.textContent = "保存修改";
         el.filmCancel.classList.remove("hidden");
+        openAdminSections.add("addFilm");
+        renderAdminSections();
       }
       if (del && confirm("确定删除影片吗？相关评分也会删除。")) {
         const { error } = await supabase.from("films").delete().eq("id", del.dataset.deleteFilm);
