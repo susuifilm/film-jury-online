@@ -231,6 +231,25 @@
     }
     .rank-no { color: var(--gold); font-weight: 900; text-align: center; }
     .rank-score { color: var(--red); font-size: 20px; font-weight: 900; min-width: 64px; text-align: right; }
+    .fold-toggle {
+      min-height: 38px;
+      padding: 0 12px;
+      font-weight: 800;
+      color: var(--gold);
+    }
+    .score-details, .result-details {
+      border-top: 1px solid var(--line);
+    }
+    .result-card {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fffdf8;
+      overflow: hidden;
+    }
+    .result-card .rank {
+      border: 0;
+      border-radius: 0;
+    }
     .bar-row { display: grid; gap: 5px; }
     .bar-label { display: flex; justify-content: space-between; color: var(--muted); font-size: 12px; }
     .bar { height: 8px; border-radius: 999px; overflow: hidden; background: #eadfcd; }
@@ -307,8 +326,8 @@
       <div class="head"><h2>揭榜区</h2><button id="exportBtn" class="admin-only hidden">导出 CSV</button></div>
       <div class="body stack">
         <div class="leaderboard" id="leaderboard"></div>
-        <h3 class="section-title">各项均分</h3>
-        <div class="bars" id="categoryBars"></div>
+        <h3 class="section-title hidden">各项均分</h3>
+        <div class="bars hidden" id="categoryBars"></div>
         <h3 class="section-title">每片影厅统计</h3>
         <div class="bars" id="screeningStats"></div>
       </div>
@@ -358,6 +377,8 @@
     let screeningStats = [];
     let editingFilmId = null;
     let activeJudgeId = null;
+    const openScoreFilms = new Set();
+    const openResultFilms = new Set();
 
     const $ = (selector) => document.querySelector(selector);
     const el = {
@@ -583,6 +604,7 @@
         const avg = reviewAvg(review);
         const visible = canSeeResult(film.id);
         const result = resultFor(film.id);
+        const scoreOpen = openScoreFilms.has(film.id);
         return `
           <article class="score-card" data-film-card="${film.id}">
             <div class="score-head">
@@ -594,6 +616,8 @@
                 <p class="progress">${visible ? `你的均分：<strong>${avg === null ? "-" : avg.toFixed(2)}</strong> · 全体总评：<strong>${result?.average_score ?? "-"}</strong>` : `已填 ${ITEMS.filter(([id]) => typeof review[id] === "number").length}/${ITEMS.length} · 完成后显示总评`}</p>
               </div>
             </div>
+            <button class="fold-toggle" type="button" data-toggle-score-film="${film.id}">${scoreOpen ? "收起评分" : "展开评分"}</button>
+            <div class="score-details ${scoreOpen ? "" : "hidden"}">
             <div class="screening">
               <label>观看影厅
                 <select data-review-field="theater" data-film-id="${film.id}">
@@ -621,6 +645,7 @@
               </div>`;
             }).join("")}
             <div class="reveal">${visible ? renderReveal(result) : `<div class="locked">总评分和各项评分已隐藏。打完这部片 10 个项目后自动解锁。</div>`}</div>
+            </div>
           </article>
         `;
       }).join("");
@@ -641,22 +666,35 @@
       el.leaderboard.innerHTML = films.length ? films.map(film => {
         const r = ranked.find(item => item.film_id === film.id);
         const rank = r ? ranked.findIndex(item => item.film_id === film.id) + 1 : "—";
-        return `<article class="rank">
-          <div class="rank-no">${rank}</div>
-          ${poster(film)}
-          <div class="title"><strong>${html(film.title)}</strong><span>${r ? `${r.completed_review_count} 人完整评分 · 分歧 ${r.score_spread ?? "-"}` : "完成你的评分后显示"}</span></div>
-          <div class="rank-score">${r?.average_score ?? "隐藏"}</div>
+        const resultOpen = openResultFilms.has(film.id);
+        return `<article class="result-card">
+          <div class="rank">
+            <div class="rank-no">${rank}</div>
+            ${poster(film)}
+            <div class="title">
+              <strong>${html(film.title)}</strong>
+              <span>${r ? `${r.completed_review_count} 人完整评分 · 分歧 ${r.score_spread ?? "-"} · 豆瓣 ${film.douban_rating ?? "-"}` : `豆瓣 ${film.douban_rating ?? "-"} · 完成你的评分后显示`}</span>
+            </div>
+            <div class="rank-score">${r?.average_score ?? "隐藏"}</div>
+          </div>
+          <button class="fold-toggle" type="button" data-toggle-result-film="${film.id}">${resultOpen ? "收起各项均分" : "展开各项均分"}</button>
+          <div class="result-details ${resultOpen ? "" : "hidden"}">${r ? renderResultDetails(r) : `<div class="locked">暂无可展示的各项评分。</div>`}</div>
         </article>`;
       }).join("") : `<div class="empty">等待影片。</div>`;
+      el.categoryBars.innerHTML = "";
+    }
 
-      const categoryRows = ITEMS.map(([id, zh]) => {
-        const values = results.map(r => Number(r[`${id}_avg`])).filter(Number.isFinite);
-        const avg = values.length ? values.reduce((a, b) => a + b, 0) / values.length : null;
-        return { zh, avg };
-      }).filter(r => r.avg !== null).sort((a, b) => b.avg - a.avg);
-      el.categoryBars.innerHTML = categoryRows.length ? categoryRows.map(row => `
-        <div class="bar-row"><div class="bar-label"><span>${row.zh}</span><strong>${row.avg.toFixed(2)}</strong></div><div class="bar"><i style="width:${row.avg * 10}%"></i></div></div>
-      `).join("") : `<div class="empty">打完至少一部片后显示。</div>`;
+    function renderResultDetails(result) {
+      const rows = ITEMS.map(([id, zh]) => {
+        const value = Number(result[`${id}_avg`]);
+        return { zh, value };
+      }).filter(row => Number.isFinite(row.value));
+      return rows.length ? `<div class="bars" style="padding:12px;">${rows.map(row => `
+        <div class="bar-row">
+          <div class="bar-label"><span>${row.zh}</span><strong>${row.value.toFixed(2)}</strong></div>
+          <div class="bar"><i style="width:${row.value * 10}%"></i></div>
+        </div>
+      `).join("")}</div>` : `<div class="locked">暂无可展示的各项评分。</div>`;
     }
 
     function renderScreeningStats() {
@@ -851,6 +889,8 @@
       const del = event.target.closest("[data-delete-film]");
       const saveAccount = event.target.closest("[data-save-account]");
       const deleteAccount = event.target.closest("[data-delete-account]");
+      const toggleScore = event.target.closest("[data-toggle-score-film]");
+      const toggleResult = event.target.closest("[data-toggle-result-film]");
       if (edit) {
         const film = films.find(f => f.id === edit.dataset.editFilm);
         editingFilmId = film.id;
@@ -883,6 +923,16 @@
           await api("/api/admin-users", { method: "DELETE", body: JSON.stringify({ user_id: deleteAccount.dataset.deleteAccount }) });
           await loadAll();
         } catch (error) { alert(error.message); }
+      }
+      if (toggleScore) {
+        const id = toggleScore.dataset.toggleScoreFilm;
+        openScoreFilms.has(id) ? openScoreFilms.delete(id) : openScoreFilms.add(id);
+        renderScores();
+      }
+      if (toggleResult) {
+        const id = toggleResult.dataset.toggleResultFilm;
+        openResultFilms.has(id) ? openResultFilms.delete(id) : openResultFilms.add(id);
+        renderResults();
       }
       const step = event.target.closest("[data-step-score]");
       if (step && activeJudgeId) {
