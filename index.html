@@ -887,4 +887,40 @@
       const step = event.target.closest("[data-step-score]");
       if (step && activeJudgeId) {
         const review = ownReviewFor(step.dataset.filmId, activeJudgeId) || {};
-        const current = typeof review[step.dataset.stepScore] === "number" ? revi
+        const current = typeof review[step.dataset.stepScore] === "number" ? review[step.dataset.stepScore] : 1;
+        const next = Math.max(1, Math.min(10, current + Number(step.dataset.step)));
+        try {
+          await upsertReview(step.dataset.filmId, { [step.dataset.stepScore]: next });
+          renderResults();
+          renderScores();
+        } catch (error) { alert(error.message); }
+      }
+    });
+
+    document.addEventListener("input", async event => {
+      const score = event.target.closest("[data-score]");
+      if (!score || !activeJudgeId) return;
+      const patch = { [score.dataset.score]: Number(score.value) };
+      score.closest(".criterion").querySelector(".num").textContent = Number(score.value).toFixed(1);
+      try {
+        await upsertReview(score.dataset.filmId, patch);
+        renderResults();
+        renderScores();
+      } catch (error) { alert(error.message); }
+    });
+
+    document.addEventListener("change", async event => {
+      const field = event.target.closest("[data-review-field]");
+      if (!field || !activeJudgeId) return;
+      try {
+        await upsertReview(field.dataset.filmId, { [field.dataset.reviewField]: field.value || null });
+      } catch (error) { alert(error.message); }
+    });
+
+    loadAll().catch(error => {
+      el.loginStatus.textContent = error.message || "初始化失败。";
+      renderAuth();
+    });
+  </script>
+</body>
+</html>
