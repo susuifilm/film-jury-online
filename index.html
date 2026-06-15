@@ -325,11 +325,17 @@
     <aside class="panel right">
       <div class="head"><h2>揭榜区</h2><button id="exportBtn" class="admin-only hidden">导出 CSV</button></div>
       <div class="body stack">
+        <label>揭榜排序
+          <select id="resultSort">
+            <option value="date">时间排序</option>
+            <option value="score">总评排序</option>
+          </select>
+        </label>
         <div class="leaderboard" id="leaderboard"></div>
         <h3 class="section-title hidden">各项均分</h3>
         <div class="bars hidden" id="categoryBars"></div>
-        <h3 class="section-title">每片影厅统计</h3>
-        <div class="bars" id="screeningStats"></div>
+        <h3 class="section-title hidden">每片影厅统计</h3>
+        <div class="bars hidden" id="screeningStats"></div>
       </div>
     </aside>
   </main>
@@ -377,6 +383,7 @@
     let screeningStats = [];
     let editingFilmId = null;
     let activeJudgeId = null;
+    let resultSort = "date";
     const openScoreFilms = new Set();
     const openResultFilms = new Set();
 
@@ -399,6 +406,7 @@
       leaderboard: $("#leaderboard"),
       categoryBars: $("#categoryBars"),
       screeningStats: $("#screeningStats"),
+      resultSort: $("#resultSort"),
       exportBtn: $("#exportBtn"),
       adminCount: $("#adminCount"),
       doubanForm: $("#doubanForm"),
@@ -430,6 +438,24 @@
 
     function resultFor(filmId) {
       return results.find(r => r.film_id === filmId);
+    }
+
+    function theaterStatsFor(filmId) {
+      return screeningStats.filter(row =>
+        row.film_id === filmId &&
+        row.stat_type === "theater" &&
+        Number(row.total) > 0
+      );
+    }
+
+    function releaseTime(film) {
+      if (!film.release_date) return Number.MAX_SAFE_INTEGER;
+      const match = String(film.release_date).match(/\d{4}(?:[-/.年]\d{1,2})?(?:[-/.月]\d{1,2})?/);
+      if (!match) return Number.MAX_SAFE_INTEGER;
+      const normalized = match[0].replace(/[年月/.]/g, "-").replace(/日/g, "");
+      const parts = normalized.split("-").filter(Boolean);
+      const date = new Date(Number(parts[0]), Number(parts[1] || 1) - 1, Number(parts[2] || 1));
+      return Number.isFinite(date.getTime()) ? date.getTime() : Number.MAX_SAFE_INTEGER;
     }
 
     function ownReviewFor(filmId, judgeId = activeJudgeId) {
@@ -662,10 +688,18 @@
     }
 
     function renderResults() {
-      const ranked = results.slice().sort((a, b) => Number(b.average_score || -1) - Number(a.average_score || -1));
-      el.leaderboard.innerHTML = films.length ? films.map(film => {
-        const r = ranked.find(item => item.film_id === film.id);
-        const rank = r ? ranked.findIndex(item => item.film_id === film.id) + 1 : "—";
+      const ranked = films.map(film => ({ film, result: resultFor(film.id) }))
+        .sort((a, b) => {
+          if (resultSort === "score") {
+            return Number(b.result?.average_score ?? -1) - Number(a.result?.average_score ?? -1);
+          }
+          return releaseTime(a.film) - releaseTime(b.film);
+        });
+      el.resultSort.value = resultSort;
+      el.leaderboard.innerHTML = ranked.length ? ranked.map((item, index) => {
+        const film = item.film;
+        const r = item.result;
+        const rank = index + 1;
         const resultOpen = openResultFilms.has(film.id);
         return `<article class="result-card">
           <div class="rank">
@@ -678,34 +712,37 @@
             <div class="rank-score">${r?.average_score ?? "隐藏"}</div>
           </div>
           <button class="fold-toggle" type="button" data-toggle-result-film="${film.id}">${resultOpen ? "收起各项均分" : "展开各项均分"}</button>
-          <div class="result-details ${resultOpen ? "" : "hidden"}">${r ? renderResultDetails(r) : `<div class="locked">暂无可展示的各项评分。</div>`}</div>
+          <div class="result-details ${resultOpen ? "" : "hidden"}">${r ? renderResultDetails(film, r) : `<div class="locked">暂无可展示的各项评分。</div>`}</div>
         </article>`;
       }).join("") : `<div class="empty">等待影片。</div>`;
       el.categoryBars.innerHTML = "";
     }
 
-    function renderResultDetails(result) {
+    function renderResultDetails(film, result) {
       const rows = ITEMS.map(([id, zh]) => {
         const value = Number(result[`${id}_avg`]);
         return { zh, value };
       }).filter(row => Number.isFinite(row.value));
-      return rows.length ? `<div class="bars" style="padding:12px;">${rows.map(row => `
+      const theaters = theaterStatsFor(film.id);
+      const maxTheater = Math.max(...theaters.map(row => Number(row.total) || 0), 1);
+      return `<div class="bars" style="padding:12px;">
+        ${rows.length ? rows.map(row => `
         <div class="bar-row">
           <div class="bar-label"><span>${row.zh}</span><strong>${row.value.toFixed(2)}</strong></div>
           <div class="bar"><i style="width:${row.value * 10}%"></i></div>
         </div>
-      `).join("")}</div>` : `<div class="locked">暂无可展示的各项评分。</div>`;
+      `).join("") : `<div class="locked">暂无可展示的各项评分。</div>`}
+        ${theaters.length ? `<h3 class="section-title">影厅统计</h3>${theaters.map(row => `
+          <div class="bar-row">
+            <div class="bar-label"><span>${html(row.label)}</span><strong>${row.total}</strong></div>
+            <div class="bar"><i style="width:${Math.max(6, Number(row.total) / maxTheater * 100)}%"></i></div>
+          </div>
+        `).join("")}` : ""}
+      </div>`;
     }
 
     function renderScreeningStats() {
-      const theater = screeningStats.filter(row => row.stat_type === "theater" && Number(row.total) > 0);
-      const max = Math.max(...screeningStats.map(row => Number(row.total) || 0), 1);
-      el.screeningStats.innerHTML = theater.length ? theater.map(row => `
-        <div class="bar-row">
-          <div class="bar-label"><span>${html(row.film_title)} · ${html(row.label)}</span><strong>${row.total}</strong></div>
-          <div class="bar"><i style="width:${Math.max(6, Number(row.total) / max * 100)}%"></i></div>
-        </div>
-      `).join("") : `<div class="empty">暂无每部影片的影厅统计。</div>`;
+      el.screeningStats.innerHTML = "";
     }
 
     async function upsertReview(filmId, patch) {
@@ -882,6 +919,10 @@
     el.adminJudgeSelect.addEventListener("change", event => {
       activeJudgeId = event.target.value;
       renderScores();
+    });
+    el.resultSort.addEventListener("change", event => {
+      resultSort = event.target.value;
+      renderResults();
     });
 
     document.addEventListener("click", async event => {
